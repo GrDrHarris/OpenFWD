@@ -252,7 +252,7 @@ static void parse_command(const uint8_t* cmd) {
     uint8_t op = *cmd;
 #ifdef HAS_CHILD_UART
     if((op & ROTOR_PREFIX) == ROTOR_PREFIX) {
-        struct UART_t* p = child_uarts[op & 0x0F];
+        struct UART_t* p = child_uarts[op & 0x0F - 2];
         uint8_t* data_p = usart_alloc(p);
         memcpy(data_p, cmd+1, MSG_LEN-1);
         usart_commit(p);
