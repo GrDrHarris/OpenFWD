@@ -16,7 +16,7 @@ struct MotorController {
     int16_t target; // angle, speed or pwm_ratio
     int16_t integral;
     int16_t Kp, Ki, Kd, Div;
-    uint8_t mode, id;
+    uint8_t mode, id, reportAngle;
 };
 #define MODE_DIR_ANGLE 0
 #define MODE_BID_ANGLE 1
@@ -41,9 +41,9 @@ struct MotorController mot_ctrl2;
 #define INA232_SHUNT_REG 0x05
 #define INA232_SHUNT 12800
 //VOLT times 1.6mV
-static const uint8_t INA232_VOLT_REG = 0x02;
+static uint8_t INA232_VOLT_REG = 0x02;
 //CURR times 1.0mA
-static const uint8_t INA232_CURR_REG = 0x04;
+static uint8_t INA232_CURR_REG = 0x04;
 #endif
 static void read_angle(I2C_HandleTypeDef* i2c, struct MotorController* ctrl) {
     ctrl->last_angle = ctrl->angle;
@@ -54,17 +54,26 @@ static void read_angle(I2C_HandleTypeDef* i2c, struct MotorController* ctrl) {
 }
 
 void set_pwm_width(uint8_t id, uint8_t width);
+static inline int16_t correct_sign(int16_t val) {
+    if(val > 2048)
+        return 4096 - val;
+    if(val < -2048)
+        return val + 4096;
+    return val;
+}
 static void motor_tick(struct MotorController* ctrl, I2C_HandleTypeDef* i2c) {
-    if(ctrl->mode != MODE_DIRECT)
+    if(ctrl -> reportAngle || ctrl -> mode != MODE_DIRECT)
         read_angle(i2c, ctrl);
+    if(ctrl -> reportAngle) {
+        uint8_t *p = usart_alloc(&uart_1);
+        *p = MOTOR_ANGLE;
+        *(p+1) = ctrl->id;
+        *(uint16_t*)(p+2) = ctrl->angle;
+    }
     int16_t pwm; 
     switch(ctrl->mode) {
         case MODE_BID_ANGLE: {
-            int16_t diff = ctrl->target - (int16_t)ctrl->angle;
-            if(diff > 2048)
-                diff = 4096 - diff;
-            else if(diff < -2048)
-                diff += 4096;
+            int16_t diff = correct_sign(ctrl->target - (int16_t)ctrl->angle);
             ctrl->integral += diff;
             pwm = 
                 (ctrl->Kp * diff + ctrl->Ki * ctrl->integral + ctrl->Kd * ctrl->speed) / ctrl->Div;
@@ -79,7 +88,7 @@ static void motor_tick(struct MotorController* ctrl, I2C_HandleTypeDef* i2c) {
         }
         case MODE_SPEED: {
             ctrl->last_speed = ctrl->speed;
-            ctrl->speed = (int16_t)ctrl->last_angle - (int16_t)ctrl->angle;
+            ctrl->speed = correct_sign(ctrl->last_angle - (int16_t)ctrl->angle);
             int16_t p = ctrl->target - ctrl->speed;
             ctrl->integral += p;
             int16_t d = ctrl->last_speed - ctrl->speed;
@@ -252,7 +261,7 @@ static void parse_command(const uint8_t* cmd) {
     uint8_t op = *cmd;
 #ifdef HAS_CHILD_UART
     if((op & ROTOR_PREFIX) == ROTOR_PREFIX) {
-        struct UART_t* p = child_uarts[op & 0x0F - 2];
+        struct UART_t* p = child_uarts[(op & 0x0F) - 2];
         uint8_t* data_p = usart_alloc(p);
         memcpy(data_p, cmd+1, MSG_LEN-1);
         usart_commit(p);
