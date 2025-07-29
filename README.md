@@ -53,6 +53,7 @@ cmake --build build
 <a id="ESP32RUD"></a>
 
 - 舵机7和8：由于STM32的GPIO不足，舵机7和8由ESP32控制，在正确连接S7,P7,S8,P8之后即可使用。软件上需要在ESPFirmware.ino中控制调整宏```RUD7_ENABLED```和```RUD8_ENABLED```。
+- 连接模式配置：使用Wifi模式还是蓝牙模式只需在```ESPFirmware.ino```中调整宏```BLE_MODE```和```WIFI_MODE```即可，另外的一些选项例如蓝牙UUID，Wifi SSID和密码，服务器IP地址等也在6~14行。为减少干扰，Wifi模式下可以通过将GPIO4接到GND来使其进入STA模式（即连接已存在的Wifi）。GPIO4内部上拉，即默认为AP模式（向外界提供Wifi服务）。如果使用外部路由器，请注意ESP32-C3只支持2.4G频段。
 
 ## 遥控APP
 
