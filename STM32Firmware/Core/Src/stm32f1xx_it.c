@@ -22,9 +22,6 @@
 #include "stm32f1xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stdint.h"
-
-#include "OpenFWDconf.h"
 #include "mainLoop.h"
 /* USER CODE END Includes */
 
@@ -35,86 +32,16 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MAX_PWM_CHANNEL 16
-#define PWM_FACT 200
-#define RUDDER_FACT 2000
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define PWM_UP(PIN, ID) \
-  if(pwm_counter == pwm_width[ID]) \
-    PIN##_GPIO_Port->BRR = PIN##_Pin;
-#define PWM_DOWN(PIN, ID) \
-  PIN##_GPIO_Port->BSRR = PIN##_Pin; \
-  pwm_width[ID] = pwm_new_width[ID];
-#define RUDDER_UP(PIN, ID) \
-  if(rudder_counter == pwm_width[ID]) \
-    PIN##_GPIO_Port->BRR = PIN##_Pin;
-#define RUDDER_DOWN(PIN, ID) PWM_DOWN(PIN, ID)
-#define MOTOR_MARCO(MACRO, MOTID) \
-  MACRO(MOT##MOTID##_F, (2 * MOTID - 2)); \
-  MACRO(MOT##MOTID##_R, (2 * MOTID - 1));
-#ifdef MOT1_ENABLED
-  #define MOTOR1_MARCO(MARCO) MOTOR_MARCO(MARCO, 1)
-#else
-  #define MOTOR1_MARCO(MARCO)
-#endif
-#ifdef MOT2_ENABLED
-  #define MOTOR2_MARCO(MARCO) MOTOR_MARCO(MARCO, 2)
-#else
-  #define MOTOR2_MARCO(MARCO)
-#endif
-#define PWM_MACROS(MARCO) \
-  MOTOR1_MARCO(MARCO); \
-  MOTOR2_MARCO(MARCO); \
-  //MACRO(LED1, 4); \
-  //MACRO(LED2, 5); \
-  //MACRO(LED3, 6); \
-  //MACRO(LED4, 7);
-#ifdef RUD1_ENABLED
-  #define RUD1_MARCO(MARCO) MARCO(RUD1_S, 8)
-#else
-  #define RUD1_MARCO(MARCO)
-#endif
-#ifdef RUD2_ENABLED
-  #define RUD2_MARCO(MARCO) MARCO(RUD2_S, 8)
-#else
-  #define RUD2_MARCO(MARCO)
-#endif
-#ifdef RUD3_ENABLED
-  #define RUD3_MARCO(MARCO) MARCO(RUD3_S, 8)
-#else
-  #define RUD3_MARCO(MARCO)
-#endif
-#ifdef RUD4_ENABLED
-  #define RUD4_MARCO(MARCO) MARCO(RUD4_S, 8)
-#else
-  #define RUD4_MARCO(MARCO)
-#endif
-#ifdef RUD5_ENABLED
-  #define RUD5_MARCO(MARCO) MARCO(RUD5_S, 8)
-#else
-  #define RUD5_MARCO(MARCO)
-#endif
-#ifdef RUD6_ENABLED
-  #define RUD6_MARCO(MARCO) MARCO(RUD6_S, 8)
-#else
-  #define RUD6_MARCO(MARCO)
-#endif
-#define RUDDER_MARCOS(MARCO) \
-  RUD1_MARCO(MARCO) \
-  RUD2_MARCO(MARCO) \
-  RUD3_MARCO(MARCO) \
-  RUD4_MARCO(MARCO) \
-  RUD5_MARCO(MARCO) \
-  RUD6_MARCO(MARCO)
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-static uint8_t pwm_new_width[MAX_PWM_CHANNEL];
-extern TIM_HandleTypeDef htim2;
 static uint8_t beep_en;
 /* USER CODE END PV */
 
@@ -125,18 +52,12 @@ static uint8_t beep_en;
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void set_pwm_width(uint8_t id, uint8_t width) {
-  pwm_new_width[id] = width;
-}
-void set_beep(uint8_t en, uint16_t arr) {
-  beep_en = en;
-  htim2.Instance->ARR = arr;
-}
+
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim1;
-extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim4;
 extern DMA_HandleTypeDef hdma_usart1_rx;
 extern DMA_HandleTypeDef hdma_usart1_tx;
 extern DMA_HandleTypeDef hdma_usart2_rx;
@@ -347,25 +268,7 @@ void DMA1_Channel7_IRQHandler(void)
 void TIM1_UP_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_IRQn 0 */
-  // this func is called every 10us or 100kHz
-  static uint8_t pwm_counter = 0;
-  static uint16_t rudder_counter = 0;
-  static uint8_t pwm_width[MAX_PWM_CHANNEL];
-  TIM1->SR = ~TIM_SR_UIF;
-  pwm_counter++; rudder_counter++;
-  PWM_MACROS(PWM_DOWN);
-  RUDDER_MARCOS(RUDDER_DOWN);
-  if(pwm_counter == PWM_FACT) {
-    pwm_counter = 0;
-    PWM_MACROS(PWM_UP);
-    if(rudder_counter == RUDDER_FACT) {
-      rudder_counter = 0;
-      RUDDER_MARCOS(RUDDER_UP);
-      //mid freq = 100kHz / 2000 = 50Hz, T = 20ms
-      mainLoop_pushTask(LOW_FREQ_SCHED);
-    }
-  }
-  return;
+  mainLoop_pushTask(LOW_FREQ_SCHED);
   /* USER CODE END TIM1_UP_IRQn 0 */
   HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_UP_IRQn 1 */
@@ -374,13 +277,12 @@ void TIM1_UP_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles TIM2 global interrupt.
+  * @brief This function handles TIM4 global interrupt.
   */
-void TIM2_IRQHandler(void)
+void TIM4_IRQHandler(void)
 {
-  /* USER CODE BEGIN TIM2_IRQn 0 */
+  /* USER CODE BEGIN TIM4_IRQn 0 */
   static uint8_t beep_status;
-  TIM2->SR = ~TIM_SR_UIF;
   if(beep_en) {
     if(beep_status) {
       BEEP_GPIO_Port->BRR = BEEP_Pin;
@@ -390,12 +292,11 @@ void TIM2_IRQHandler(void)
       beep_status = 1;
     }
   }
-  return;
-  /* USER CODE END TIM2_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim2);
-  /* USER CODE BEGIN TIM2_IRQn 1 */
+  /* USER CODE END TIM4_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim4);
+  /* USER CODE BEGIN TIM4_IRQn 1 */
 
-  /* USER CODE END TIM2_IRQn 1 */
+  /* USER CODE END TIM4_IRQn 1 */
 }
 
 /**
@@ -427,5 +328,8 @@ void USART2_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
-
+void set_beep(uint8_t en, uint16_t arr) {
+  beep_en = en;
+  htim4.Instance->ARR = arr;
+}
 /* USER CODE END 1 */

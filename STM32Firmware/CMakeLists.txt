@@ -28,7 +28,7 @@ include("cmake/gcc-arm-none-eabi.cmake")
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 # Enable CMake support for ASM and C languages
-enable_language(C ASM CXX)
+enable_language(C ASM)
 
 # Core project settings
 project(${CMAKE_PROJECT_NAME})
@@ -47,9 +47,9 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    Core/Src/main.c
     Core/Src/mainLoop.c
     Core/Src/uart.c
+    # Add user sources here
 )
 
 # Add include paths

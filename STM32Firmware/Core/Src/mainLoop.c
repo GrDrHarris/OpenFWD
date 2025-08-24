@@ -2,6 +2,7 @@
 
 #include "OpenFWDconf.h"
 #include "stdint.h"
+#include "stm32f1xx_hal_tim.h"
 #include "string.h"
 
 #include "main.h"
@@ -10,6 +11,7 @@
 struct MainLoop mainLoop;
 extern I2C_HandleTypeDef hi2c1, hi2c2;
 extern ADC_HandleTypeDef hadc1, hadc2;
+extern TIM_HandleTypeDef htim1, htim2, htim3;
 struct MotorController {
     uint16_t angle, last_angle; // one of 4096 circle
     int16_t speed, last_speed; // 2pi / 4096 / 20ms rad/s
@@ -17,6 +19,22 @@ struct MotorController {
     int16_t integral;
     int16_t Kp, Ki, Kd, Div;
     uint8_t mode, id, reportAngle;
+};
+struct TimerChannelMap {
+    TIM_HandleTypeDef *timer;
+    uint32_t channel;
+    uint8_t default_width;
+} timerChannels[] =  {
+    {&htim3, TIM_CHANNEL_1, 0}, // MOT1_F
+    {&htim3, TIM_CHANNEL_2, 0}, // MOT1_R
+    {&htim3, TIM_CHANNEL_3, 0}, // MOT2_F
+    {&htim3, TIM_CHANNEL_4, 0}, // MOT2_R
+    {&htim1, TIM_CHANNEL_1, 100}, // RUD1_S
+    {&htim2, TIM_CHANNEL_2, 100}, // RUD2_S
+    {&htim2, TIM_CHANNEL_1, 100}, // RUD3_S
+    {&htim1, TIM_CHANNEL_2, 100}, // RUD4_S
+    {&htim1, TIM_CHANNEL_3, 100}, // RUD5_S
+    {&htim1, TIM_CHANNEL_4, 100}  // RUD6_S
 };
 #define MODE_DIR_ANGLE 0
 #define MODE_BID_ANGLE 1
@@ -53,7 +71,9 @@ static void read_angle(I2C_HandleTypeDef* i2c, struct MotorController* ctrl) {
     ctrl->speed = ctrl->angle - ctrl->last_angle;
 }
 
-void set_pwm_width(uint8_t id, uint8_t width);
+static inline void set_pwm_width(uint8_t id, uint8_t width) {
+    __HAL_TIM_SET_COMPARE(timerChannels[id].timer, timerChannels[id].channel, width);
+}
 static inline int16_t correct_sign(int16_t val) {
     if(val > 2048)
         return 4096 - val;
@@ -302,13 +322,7 @@ static void parse_command(const uint8_t* cmd) {
         case RUDDER_SET_TRG: {
             uint8_t id = *(cmd+1);
             uint8_t target = *(cmd+2);
-            set_pwm_width(id + 7, target + 50);
-            break;
-        }
-        case LED_SET_PWM: {
-            uint8_t id = *(cmd+1);
-            uint8_t target = *(cmd+2);
-            set_pwm_width(id + 3, target);
+            set_pwm_width(id + 3, target + 50);
             break;
         }
         case LED_SET_TICK: {
@@ -384,6 +398,9 @@ void mainLoop_loop(void) {
     uint8_t buffer2[3] = {INA232_SHUNT_REG, (INA232_SHUNT >> 8) & 0xFF, INA232_SHUNT & 0xFF};
     HAL_I2C_Master_Transmit(&hi2c1, INA232_ADDR, buffer2, sizeof(buffer2), HAL_MAX_DELAY);
 #endif
+    for(unsigned i = 0; i < sizeof(timerChannels) / sizeof(struct TimerChannelMap); i++) {
+        set_pwm_width(i, timerChannels[i].default_width);
+    }
     while(1) {
         if(mainLoop.head != mainLoop.tail) {
             do_task(mainLoop.tasks[mainLoop.tail % TASK_NUM]);
