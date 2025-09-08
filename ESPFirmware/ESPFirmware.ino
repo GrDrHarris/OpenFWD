@@ -2,8 +2,9 @@
 #include "../Communicate.h"
 #define RUD7_ENABLED
 #define RUD8_ENABLED
+const unsigned int DEVICE_TYPE = 0x00000000;
 
-#define BLE_MODE
+//#define BLE_MODE
 #define BLE_DEVICE_NAME     "OpenFWDModel"
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -13,7 +14,19 @@
 #define WIFI_PASSWORD "OpenFWDPassword"
 #define SERVER_IP 10 // 10~128, leave controllers to >128
 
-//#ifdef BLE_MODE
+#if defined(WIFI_MODE) == defined(BLE_MODE)
+#error "must select one of wifi mode or ble mode"
+#endif
+
+static uint8_t ID_RESPOND[MSG_LEN] = {
+  TYPE_RESPOND,
+  DEVICE_TYPE & 0xFF,
+  (DEVICE_TYPE >> 8) & 0xFF,
+  (DEVICE_TYPE >> 16) & 0xFF,
+  (DEVICE_TYPE >> 24) & 0xFF
+};
+
+#ifdef BLE_MODE
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
@@ -44,6 +57,7 @@ static uint8_t rud_new_value8;
 #endif
 
 static uint8_t msg_buf[MSG_LEN];
+static inline void report_error(uint8_t* buf_rud);
 static inline void parse_command(uint8_t *data, int len) {
 #ifdef RUD7_ENABLED
   if(*data == RUDDER_SET_TRG && *(data+1) == 7) {
@@ -57,6 +71,10 @@ static inline void parse_command(uint8_t *data, int len) {
     return;
   }
 #endif
+  if(*data == TYPE_QUERY) {
+    report_error(ID_RESPOND);
+    return;
+  }
   if(len < MSG_LEN) {
     memcpy(msg_buf, data, len);
     Serial.write(msg_buf, MSG_LEN);
@@ -103,11 +121,11 @@ class TCPServer {
         } else {
           client = server.accept();
         }
+      }
 
-        if (client && client.connected() && client.available() >= MSG_LEN) {
-          client.readBytes(data, MSG_LEN);
-          parse_command(data, MSG_LEN);
-        }
+      if (client && client.connected() && client.available() >= MSG_LEN) {
+        client.readBytes(data, MSG_LEN);
+        parse_command(data, MSG_LEN);
       }
     }
     void writeBytes(uint8_t* data, int len) {
