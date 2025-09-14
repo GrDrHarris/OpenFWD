@@ -215,6 +215,7 @@ static inline void led_tick(uint8_t id) {
         LEDControlers[id].tick++;
         if(LEDControlers[id].tick == LEDControlers[id].time[LEDControlers[id].ptr]) {
             LEDControlers[id].ptr++;
+            LEDControlers[id].tick = 0;
             if(LEDControlers[id].time[LEDControlers[id].ptr] == 0)
                 LEDControlers[id].ptr = 0;
             if(LEDControlers[id].ptr & 1)
@@ -230,6 +231,14 @@ static inline void led_reset(uint8_t id) {
     LEDControlers[id].ptr = 0;
     LEDControlers[id].tick = 0;
     LEDPins[id].port->BSRR = LEDPins[id].pin;
+}
+
+static inline void led_on(uint8_t id) {
+    id--;
+    LEDControlers[id].enable = true;
+    LEDControlers[id].ptr = 0;
+    LEDControlers[id].tick = 0;
+    LEDPins[id].port->BRR = LEDPins[id].pin;
 }
 
 static inline void led_off(uint8_t id) {
@@ -398,6 +407,11 @@ static void parse_command(const uint8_t* cmd) {
             uint8_t id = *(cmd+1);
             led_reset(id);
             break;
+        }
+        case LED_ON: {
+        	uint8_t id = *(cmd+1);
+        	led_on(id);
+        	break;
         }
         case LED_OFF: {
             uint8_t id = *(cmd+1);
