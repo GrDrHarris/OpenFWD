@@ -18,19 +18,18 @@
 
 #define BUF_SIZE 8
 struct UART_t{
-    uint8_t rx_buf[BUF_SIZE][MSG_LEN], tx_buf[BUF_SIZE][MSG_LEN];
-    int rx_head, rx_tail, tx_head, tx_tail;
+    uint8_t rx_buf[BUF_SIZE][MSG_LEN], tx_buf[BUF_SIZE][MSG_LEN], tx_len[BUF_SIZE];
+    int rx_head, rx_tail, tx_head, tx_tail, id;
     UART_HandleTypeDef *uart;
     bool send_inflight;
 };
-extern struct UART_t uart_1;
-#ifdef UART2_ENABLED
-extern struct UART_t uart_2;
-#endif
+extern struct UART_t uarts[];
+extern struct UART_t *uart_root;
 void initlize_usart(void);
 //should not be called in handlers! alloc should always followed by commit!
 uint8_t* usart_alloc(struct UART_t *uart);
 void usart_commit(struct UART_t *uart);
 const uint8_t* usart_poll(struct UART_t *uart);
-
+void usart_delayed_send(struct UART_t* uart);
+void UART_IDLE_Handler(struct UART_t *uart);
 #endif /* INC_UART_H_ */

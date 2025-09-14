@@ -23,7 +23,8 @@ static uint8_t ID_RESPOND[MSG_LEN] = {
   DEVICE_TYPE & 0xFF,
   (DEVICE_TYPE >> 8) & 0xFF,
   (DEVICE_TYPE >> 16) & 0xFF,
-  (DEVICE_TYPE >> 24) & 0xFF
+  (DEVICE_TYPE >> 24) & 0xFF,
+  END_BYTE
 };
 
 #ifdef BLE_MODE
@@ -56,8 +57,6 @@ static uint8_t rud_new_value7;
 static uint8_t rud_new_value8;
 #endif
 
-static uint8_t msg_buf[MSG_LEN];
-static inline void report_error(uint8_t* buf_rud);
 static inline void parse_command(uint8_t *data, int len) {
 #ifdef RUD7_ENABLED
   if(*data == RUDDER_SET_TRG && *(data+1) == 7) {
@@ -72,15 +71,10 @@ static inline void parse_command(uint8_t *data, int len) {
   }
 #endif
   if(*data == TYPE_QUERY) {
-    report_error(ID_RESPOND);
+    report_error(ID_RESPOND, 6);
     return;
   }
-  if(len < MSG_LEN) {
-    memcpy(msg_buf, data, len);
-    Serial.write(msg_buf, MSG_LEN);
-  } else if(len == MSG_LEN) {
-    Serial.write(data, len);
-  }
+    Serial1.write(data, len);
 }
 
 #ifdef BLE_MODE
@@ -94,8 +88,8 @@ class BLECallback : public BLECharacteristicCallbacks {
     parse_command(data, len);
   }
 };
-static inline void report_error(uint8_t* buf_rud) {
-  pCharacteristic->setValue(buf_rud, MSG_LEN);
+static inline void report_error(uint8_t* buf_rud, int len) {
+  pCharacteristic->setValue(buf_rud, len);
   pCharacteristic->notify();
 }
 #endif
@@ -108,8 +102,11 @@ class TCPServer {
     WiFiServer server;
     WiFiClient client;
     uint8_t data[MSG_LEN];
+    uint8_t ptr;
   public:
-    TCPServer() : server(WIFI_PORT) {}
+    TCPServer() : server(WIFI_PORT) {
+      ptr = 0;
+    }
     void begin() {
       server.begin();
     }
@@ -123,9 +120,12 @@ class TCPServer {
         }
       }
 
-      if (client && client.connected() && client.available() >= MSG_LEN) {
-        client.readBytes(data, MSG_LEN);
-        parse_command(data, MSG_LEN);
+      if (client && client.connected()) {
+        ptr += client.read(data + ptr, MSG_LEN);
+        if(data[ptr - 1] == END_BYTE) {
+          parse_command(data, ptr);
+          ptr = 0;
+        }
       }
     }
     void writeBytes(uint8_t* data, int len) {
@@ -133,8 +133,8 @@ class TCPServer {
         client.write(data, len);
     }
 } tcpServer;
-static inline void report_error(uint8_t* buf_rud) {
-  tcpServer.writeBytes(buf_rud, MSG_LEN);
+static inline void report_error(uint8_t* buf_rud, int len) {
+  tcpServer.writeBytes(buf_rud, len);
 }
 #endif
 
@@ -162,7 +162,8 @@ void IRAM_ATTR timerCallback() {
     if(digitalRead(RUD7_P_Pin)) {
       buf_rud[0] = RUDDER_PROTECT;
       buf_rud[1] = 7;
-      report_error(buf_rud);
+      buf_rud[2] = END_BYTE;
+      report_error(buf_rud, 3);
     }
 #endif
 #ifdef RUD8_ENABLED
@@ -171,14 +172,15 @@ void IRAM_ATTR timerCallback() {
     if(digitalRead(RUD8_P_Pin)) {
       buf_rud[0] = RUDDER_PROTECT;
       buf_rud[1] = 8;
-      report_error(buf_rud);
+      buf_rud[2] = END_BYTE;
+      report_error(buf_rud, 3);
     }
 #endif
   }
 }
 #endif
 void setup() {
-  Serial.begin(115200);
+  Serial1.begin(115200, SERIAL_8N1, 20, 21);
 #ifdef RUD7_ENABLED
   pinMode(RUD7_S_Pin, OUTPUT);
   pinMode(RUD7_P_Pin, INPUT);
@@ -226,16 +228,21 @@ void setup() {
 }
 
 void loop() {
-  uint8_t buffer[MSG_LEN];
-  if (Serial.available()) {
-    Serial.readBytes(buffer, MSG_LEN);
+  static uint8_t buffer[MSG_LEN];
+  static int ptr = 0;
+  if (Serial1.available()) {
+    buffer[ptr] = Serial1.read();
+    ptr++;
+    if(buffer[ptr-1] == END_BYTE) {
 #ifdef BLE_MODE
-    pCharacteristic->setValue(buffer, MSG_LEN);
-    pCharacteristic->notify();
+      pCharacteristic->setValue(buffer, ptr);
+      pCharacteristic->notify();
 #endif
 #ifdef WIFI_MODE
-    tcpServer.writeBytes(buffer, MSG_LEN);
+      tcpServer.writeBytes(buffer, ptr);
 #endif
+      ptr = 0;
+    }
   }
 #ifdef WIFI_MODE
     tcpServer.update();

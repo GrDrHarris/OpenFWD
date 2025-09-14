@@ -10,7 +10,7 @@
 
 //#define REPORT_TOT_POWER
 
-//#define UART2_ENABLED
+#define UART2_ENABLED
 
 #define MOT1_ENABLED
 #define MOT1_SENSOR_DISABLED true

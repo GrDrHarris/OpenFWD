@@ -20,7 +20,7 @@
 struct MainLoop mainLoop;
 extern I2C_HandleTypeDef hi2c1, hi2c2;
 extern ADC_HandleTypeDef hadc1, hadc2;
-extern TIM_HandleTypeDef htim1, htim2, htim3;
+extern TIM_HandleTypeDef htim1, htim2, htim3, htim4;
 struct PinData {
     GPIO_TypeDef* port;
     unsigned pin;
@@ -121,10 +121,12 @@ static inline int16_t correct_sign(int16_t val) {
 }
 
 static inline void report_angle(struct MotorController* ctrl) {
-    uint8_t *p = usart_alloc(&uart_1);
+    uint8_t *p = usart_alloc(uart_root);
     *p = MOTOR_ANGLE;
     *(p+1) = ctrl->id;
     *(uint16_t*)(p+2) = ctrl->angle;
+    *(p+4) = END_BYTE;
+    usart_commit(uart_root);
 }
 
 static inline int16_t calc_bid_angle(struct MotorController* ctrl) {
@@ -182,20 +184,22 @@ static inline void motor_tick(struct MotorController* ctrl) {
     if (HAL_ADC_PollForConversion(ctrl->adc, 10) == HAL_OK)
     {
         uint16_t v = HAL_ADC_GetValue(ctrl->adc);
-        uint8_t *p = usart_alloc(&uart_1);
+        uint8_t *p = usart_alloc(uart_root);
         *p = MOTOR_CURRENT;
         *(p+1) = ctrl->id;
         *(uint16_t*)(p+2) = v;
-        usart_commit(&uart_1);
+        *(p+4) = END_BYTE;
+        usart_commit(uart_root);
     }
 #endif
 
 #ifdef REPORT_MOT_PROTECT
     if(!(ctrl->protect_pin.port->IDR & ctrl->protect_pin.pin)) {
-        uint8_t* p = usart_alloc(&uart_1);
+        uint8_t* p = usart_alloc(uart_root);
         *p = MOTOR_PROTECT;
         *(p+1) = ctrl->id;
-        usart_commit(&uart_1);
+        *(p+2) = END_BYTE;
+        usart_commit(uart_root);
     }
 #endif
 }
@@ -242,7 +246,7 @@ static inline void led_pause(uint8_t id) {
 
 #ifdef REPORT_TOT_POWER
 static inline void report_total_power(void) {
-    uint8_t *p = usart_alloc(&uart_1);
+    uint8_t *p = usart_alloc(uart_root);
     uint8_t buffer[2];
     *p = TOTAL_POWER;
     HAL_I2C_Master_Transmit(&hi2c1, INA232_ADDR, &INA232_CURR_REG, 1, HAL_MAX_DELAY);
@@ -251,17 +255,19 @@ static inline void report_total_power(void) {
     HAL_I2C_Master_Transmit(&hi2c1, INA232_ADDR, &INA232_VOLT_REG, 1, HAL_MAX_DELAY);
     HAL_I2C_Master_Receive(&hi2c1, INA232_ADDR, buffer, 2, HAL_MAX_DELAY);
     *(p+3) = buffer[0]; *(p+4) = buffer[1];
-    usart_commit(&uart_1);
+    *(p+5) = END_BYTE;
+    usart_commit(uart_root);
 }
 #endif
 
 static inline void check_rud_protect(uint8_t id) {
     id--;
     if(rudderControllers[id].protect_pin.port->IDR & rudderControllers[id].protect_pin.pin) {
-        uint8_t* p = usart_alloc(&uart_1);
+        uint8_t* p = usart_alloc(uart_root);
         *p = RUDDER_PROTECT;
         *(p+1) = id + 1;
-        usart_commit(&uart_1);
+        *(p+2) = END_BYTE;
+        usart_commit(uart_root);
     }
 }
 
@@ -310,25 +316,30 @@ static void do_low_freq_event(void) {
 #endif
 }
 void set_beep(uint8_t en, uint16_t arr);
-#ifdef UART2_ENABLED //for extension of more uarts
+
+#if defined(UART2_ENABLED) //for future extension
 #define HAS_CHILD_UART
 #endif
 #ifdef HAS_CHILD_UART
-struct UART_t* child_uarts[] = {&uart_2};
 static void upload_command(const uint8_t* cmd, uint8_t uart_id) {
-    uint8_t* p = usart_alloc(&uart_1);
+    uint8_t* p = usart_alloc(uart_root);
     *p = ROTOR_PREFIX | uart_id;
     memcpy(p+1, cmd, MSG_LEN - 1);
-    usart_commit(&uart_1);
+    usart_commit(uart_root);
 }
 #endif
 static void parse_command(const uint8_t* cmd) {
     uint8_t op = *cmd;
 #ifdef HAS_CHILD_UART
-    if((op & ROTOR_PREFIX) == ROTOR_PREFIX) {
-        struct UART_t* p = child_uarts[(op & 0x0F) - 2];
+    if((op & ROTOR_PREFIX_MASK) == ROTOR_PREFIX) {
+        struct UART_t* p = &uarts[(op & 0x0F) - 1];
         uint8_t* data_p = usart_alloc(p);
-        memcpy(data_p, cmd+1, MSG_LEN-1);
+        const uint8_t *src = cmd + 1;
+        int len = -1;
+        do{
+        	len++;
+        	*(data_p + len) = *(src + len);
+        }while(*(src + len) != END_BYTE);
         usart_commit(p);
         return;
     }
@@ -406,15 +417,27 @@ static void parse_command(const uint8_t* cmd) {
     }
 }
 static void do_task(uint8_t task) {
+	if((task & UART_RECV_MASK) == UART_RECV) {
+		uint8_t uart_id = task >> 4;
+		const uint8_t *cmd = usart_poll(&uarts[uart_id - 1]);
+		if(uart_id == 1)
+			parse_command(cmd);
+#ifdef HAS_CHILD_UART
+		else
+			upload_command(cmd, uart_id);
+#endif
+		return;
+	}
+
+	if((task & UART_SEND_MASK) == UART_SEND) {
+		uint8_t uart_id = task >> 4;
+		usart_delayed_send(&uarts[uart_id]);
+		return;
+	}
+
     switch(task) {
         case LOW_FREQ_SCHED:
             do_low_freq_event(); break;
-        case UART1_RECV:
-            parse_command(usart_poll(&uart_1)); break;
-#ifdef UART2_ENABLED
-        case UART2_RECV:
-            upload_command(usart_poll(&uart_2), 2); break;
-#endif
     }
 }
 
@@ -449,6 +472,8 @@ void mainLoop_loop(void) {
     init_motor();
     init_rudder();
     initlize_usart();
+    HAL_TIM_Base_Start_IT(&htim1);
+    HAL_TIM_Base_Start_IT(&htim4);
     while(1) {
         if(mainLoop.head != mainLoop.tail) {
             do_task(mainLoop.tasks[mainLoop.tail % TASK_NUM]);
