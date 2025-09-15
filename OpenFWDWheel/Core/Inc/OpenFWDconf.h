@@ -13,7 +13,7 @@
 #define UART2_ENABLED
 
 #define MOT1_ENABLED
-#define MOT1_SENSOR_DISABLED true
+#define MOT1_SENSOR_DISABLED false
 #define MOT2_ENABLED
 #define MOT2_SENSOR_DISABLED true
 //#define REPORT_MOT_CURRENT

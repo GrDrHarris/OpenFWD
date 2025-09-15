@@ -56,7 +56,7 @@ struct MotorController {
     }, {
         .angle = 0, .last_angle = 0, .speed = 0, .last_speed = 0, .target = 0, .integral = 0,
         .Kp = 10, .Ki = 1, .Kd = 0, .Div = 3,
-        .mode = MODE_DIRECT, .sensorDisabled = MOT2_SENSOR_DISABLED, .reportAngle = true, .id = 2,
+        .mode = MODE_DIRECT, .sensorDisabled = MOT2_SENSOR_DISABLED, .reportAngle = false, .id = 2,
         .f_channel = {&htim3, TIM_CHANNEL_3, 0}, .r_channel = {&htim3, TIM_CHANNEL_4, 0},
         .protect_pin = {MOT2_P_GPIO_Port, MOT2_P_Pin}, .i2c = &hi2c2, .adc = &hadc2
     }
@@ -106,8 +106,9 @@ static inline void read_angle(struct MotorController* ctrl) {
     if(ctrl->sensorDisabled)
         return;
     ctrl->last_angle = ctrl->angle;
-    uint8_t tmp[2];
-    HAL_I2C_Mem_Read(ctrl->i2c, AS5600_ADDR, 0x0C, I2C_MEMADD_SIZE_16BIT, tmp, 2, HAL_MAX_DELAY);
+    uint8_t tmp[2] = {0, 0};
+    uint8_t stat = HAL_I2C_Mem_Read(ctrl->i2c, AS5600_ADDR, 0x0C, I2C_MEMADD_SIZE_8BIT, tmp, 1, HAL_MAX_DELAY);
+    stat = HAL_I2C_Mem_Read(ctrl->i2c, AS5600_ADDR, 0x0D, I2C_MEMADD_SIZE_8BIT, tmp + 1, 1, HAL_MAX_DELAY);
     ctrl->angle = ((tmp[0] & 0x000f) << 8) | tmp[1];
     ctrl->speed = ctrl->angle - ctrl->last_angle;
 }

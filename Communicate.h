@@ -6,16 +6,6 @@
 #define ROTOR_PREFIX_MASK 0xF0
 #define ROTOR_PREFIX 0xE0
 
-/**
- * In order to tell the partener that the uart is ready,  
- * after boot (2 * MSG_LEN - 1) bytes of SYNC_BIT should be 
- * send through the uart. After sending the sync bytes, delay 5ms
- * for the partener's reaction.
- * After receiveing a message that are completely made up of 
- * SYNC_BYTE, the mcu should clear the incoming buffer. Better wait 
- * for 1ms to make sure all sync bytes have arrived. 
- * (At 115200 bps, 16 bytes only takes for about 1us to transmit)
- */
 #define END_BYTE 0xFF
 
 enum COMMAND_PREFIX {
