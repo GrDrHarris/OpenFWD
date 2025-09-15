@@ -29,6 +29,9 @@ enum COMMAND_PREFIX {
     LED_ON, // LED_ID
     LED_OFF, // LED_ID
     LED_PAUSE, // LED_ID
+    /* 
+     * Base Freq = 72M / 4000 = 18kHz
+     */
     BEEP_SET, // BEEP_EN FRAC_LSB FRAC_MSB
     TYPE_QUERY //
 };
