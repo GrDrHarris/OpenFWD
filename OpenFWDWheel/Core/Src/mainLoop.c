@@ -80,19 +80,19 @@ struct PinData LEDPins[] = {
 };
 #define AS5600_ADDR (0x36 << 1)
 #ifdef REPORT_TOT_POWER
-#define INA232_ADDR (0x40 << 1)
-#define INA232_CONF_REG 0x00
-#define INA232_CONF 0x4427
-/*  R_shunt = 4m
+#define INA219_ADDR (0x40 << 1)
+#define INA219_CONF_REG 0x00
+#define INA219_CONF 0x199F //0b0001100110011111
+/*  R_shunt = 10mOhm
     I_max = 20A
     I_LSB = 1000uA
  */
-#define INA232_SHUNT_REG 0x05
-#define INA232_SHUNT 12800
-//VOLT times 1.6mV
-static uint8_t INA232_VOLT_REG = 0x02;
+#define INA219_SHUNT_REG 0x05
+#define INA219_SHUNT 4096
+//VOLT times 4mV
+static uint8_t INA219_VOLT_REG = 0x02;
 //CURR times 1.0mA
-static uint8_t INA232_CURR_REG = 0x04;
+static uint8_t INA219_CURR_REG = 0x04;
 #endif
 static inline void set_pwm_width(struct TimerChannel* channel, uint8_t val) {
     __HAL_TIM_SET_COMPARE(channel->timer, channel->channel, val);
@@ -256,15 +256,17 @@ static inline void led_pause(uint8_t id) {
 
 #ifdef REPORT_TOT_POWER
 static inline void report_total_power(void) {
+	//I2C is big ended
     uint8_t *p = usart_alloc(uart_root);
     uint8_t buffer[2];
     *p = TOTAL_POWER;
-    HAL_I2C_Master_Transmit(&hi2c1, INA232_ADDR, &INA232_CURR_REG, 1, HAL_MAX_DELAY);
-    HAL_I2C_Master_Receive(&hi2c1, INA232_ADDR, buffer, 2, HAL_MAX_DELAY);
-    *(p+1) = buffer[0]; *(p+2) = buffer[1];
-    HAL_I2C_Master_Transmit(&hi2c1, INA232_ADDR, &INA232_VOLT_REG, 1, HAL_MAX_DELAY);
-    HAL_I2C_Master_Receive(&hi2c1, INA232_ADDR, buffer, 2, HAL_MAX_DELAY);
-    *(p+3) = buffer[0]; *(p+4) = buffer[1];
+    HAL_I2C_Master_Transmit(&hi2c1, INA219_ADDR, &INA219_CURR_REG, 1, HAL_MAX_DELAY);
+    HAL_I2C_Master_Receive(&hi2c1, INA219_ADDR, buffer, 2, HAL_MAX_DELAY);
+    *(p+1) = buffer[1]; *(p+2) = buffer[0];
+    HAL_I2C_Master_Transmit(&hi2c1, INA219_ADDR, &INA219_VOLT_REG, 1, HAL_MAX_DELAY);
+    HAL_I2C_Master_Receive(&hi2c1, INA219_ADDR, buffer, 2, HAL_MAX_DELAY);
+    int16_t u = (buffer[1] | ((int16_t)buffer[0]) << 8) >> 3;
+    *(p+3) = u & 0xFF; *(p+4) = (u >> 8) & 0xFF;
     *(p+5) = END_BYTE;
     usart_commit(uart_root);
 }
@@ -458,10 +460,11 @@ static void do_task(uint8_t task) {
 
 #ifdef REPORT_TOT_POWER
 static void init_power(void) {
-    uint8_t buffer1[3] = {INA232_CONF_REG, (INA232_CONF >> 8) & 0xFF, INA232_CONF & 0xFF};
-    HAL_I2C_Master_Transmit(&hi2c1, INA232_ADDR, buffer1, sizeof(buffer1), HAL_MAX_DELAY);
-    uint8_t buffer2[3] = {INA232_SHUNT_REG, (INA232_SHUNT >> 8) & 0xFF, INA232_SHUNT & 0xFF};
-    HAL_I2C_Master_Transmit(&hi2c1, INA232_ADDR, buffer2, sizeof(buffer2), HAL_MAX_DELAY);
+	//I2C is big ended
+    uint8_t buffer1[3] = {INA219_CONF_REG, (INA219_CONF >> 8) & 0xFF, INA219_CONF & 0xFF};
+    HAL_I2C_Master_Transmit(&hi2c1, INA219_ADDR, buffer1, sizeof(buffer1), HAL_MAX_DELAY);
+    uint8_t buffer2[3] = {INA219_SHUNT_REG, (INA219_SHUNT >> 8) & 0xFF, INA219_SHUNT & 0xFF};
+    HAL_I2C_Master_Transmit(&hi2c1, INA219_ADDR, buffer2, sizeof(buffer2), HAL_MAX_DELAY);
 }
 #endif
 
