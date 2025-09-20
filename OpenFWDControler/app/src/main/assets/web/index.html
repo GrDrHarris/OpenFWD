@@ -1,8 +1,90 @@
 <html>
 <head>
     <title>Hello World</title>
+    <style>
+        div {
+            margin: 10px;
+        }
+        body {
+            text-align: center;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+        .outerBox {
+            border-style: solid;
+            border-width: 3px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 60%;
+            margin: 0 auto;
+        }
+        .gridBox {
+            display: grid;
+            place-items: center;
+            grid-template-columns: 1fr 2fr;
+            gap: 10px
+        }
+        .innerBox {
+            display: contents;
+        }
+        .input {
+            border-radius: 5px;
+            border-width: 2px;
+            max-width: 800px;
+        }
+        .divider {
+            grid-column: 1 / span 2;
+            height: 1px;
+            margin: 5px 0;
+        }
+        .button {
+            background-color: blue;
+            color: white;
+            margin: auto;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            max-width: 20%;
+            font-size: large;
+            border-radius: 5px;
+            border-color: rgb(0, 0, 200);
+        }
+        .title {
+            font-size: xx-large;
+            font-weight: bold;
+        }
+        #error {
+            color: red;
+        }
+    </style>
 </head>
 <body>
-    <h1>Hello World!</h1>
+    <div class="title">欢迎使用OpenFWD</div>
+    <div class="outerBox">
+        <div class="gridBox">
+            <div class="divider"></div>
+                <div class="innerBox">
+                    <label>IP:</label>
+                    <input id="IP" class="input">
+                </div>
+                <div class="innerBox">
+                    <label>Port:</label> 
+                    <input id="Port" class="input">
+                </div>
+            </div>
+            <button class="button" id="connect">链接！</button>
+            <div id="error"></div>
+        </div>
+    </div>
 </body>
+<script>
+function connect() {
+    ip = document.getElementById('IP').value
+    port = document.getElementById('Port').value
+    msg = AndroidBridge.connectPeer(ip, port)
+    document.getElementById('error').textContent = msg
+    setTimeout(() => {
+        document.getElementById('error').textContent = ""
+    }, 1000)
+}
+document.getElementById('connect').addEventListener('click', connect);
+</script>
 </html>

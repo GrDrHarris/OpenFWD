@@ -1,39 +1,42 @@
 package com.grharris.openfwdcontroler
 
+import android.util.Log
 import android.webkit.WebView
+import java.io.IOException
+import java.lang.NumberFormatException
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.UnknownHostException
 
 class AndroidBridge(
     private val context: android.content.Context,
     private val webView: WebView
 ) {
-
+    private var connection: Socket = Socket()
     @android.webkit.JavascriptInterface
-    fun sendTcpRequest(host: String, port: Int, data: String) {
-        Thread {
-            try {
-                java.net.Socket(host, port).use { socket ->
-                    socket.getOutputStream().write(data.toByteArray())
-
-                    // 读取响应（示例）
-                    val input = socket.getInputStream()
-                    val response = input.bufferedReader().readText()
-
-                    webView.post {
-                        webView.evaluateJavascript(
-                            "window.onTcpResponse('${response.escapeJs()}')",
-                            null
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                webView.post {
-                    webView.evaluateJavascript(
-                        "window.onTcpError('${e.message?.escapeJs()}')",
-                        null
-                    )
-                }
-            }
-        }.start()
+    fun connectPeer(host: String, port: String): String {
+        try {
+            if(connection.isClosed)
+                connection = Socket()
+            val portInt = port.toInt()
+            connection.connect(InetSocketAddress(host, portInt), 1000)
+            return ""
+        } catch (e : NumberFormatException) {
+            Log.w("WARN",  e.message ?: "Unknown error")
+            return "Invalid port"
+        } catch (e : UnknownHostException) {
+            Log.w("WARN",  e.message ?: "Unknown error")
+            return "Unknown host"
+        } catch (e : IOException) {
+            Log.w("WARN",  e.message ?: "Unknown error")
+            return "Failed to connect"
+        } catch (e : SecurityException) {
+            Log.w("WARN",  e.message ?: "Unknown error")
+            return "Security exception"
+        } catch (e : IllegalArgumentException) {
+            Log.w("WARN",  e.message ?: "Unknown error")
+            return "Invalid port"
+        }
     }
 
     @android.webkit.JavascriptInterface

@@ -1,18 +1,11 @@
 package com.grharris.openfwdcontroler
 
-import android.content.ContentValues.TAG
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.grharris.openfwdcontroler.ui.theme.OpenFWDControlerTheme
 import java.io.File
 import java.io.IOException
 
@@ -30,9 +23,9 @@ class MainActivity : ComponentActivity() {
 
         // 初始化网页根目录（可读写）
         webRootDir = File(filesDir, "web")
-        if (!webRootDir.exists()) {
+        //if (!webRootDir.exists()) {
             copyAssetsToWebDir() // 首次运行拷贝assets中的默认网页
-        }
+        //}
 
         // 启动本地HTTP服务器（端口8080）
         try {
@@ -45,6 +38,9 @@ class MainActivity : ComponentActivity() {
 
     private fun setupWebView() {
         // 启用JavaScript
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CUPCAKE) {
+            webView.settings.allowFileAccess = true
+        }
         webView.settings.javaScriptEnabled = true
 
         // 暴露AndroidBridge给JS
